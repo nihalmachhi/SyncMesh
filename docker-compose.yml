@@ -1,0 +1,24 @@
+services:
+  node-a:
+    build: .
+    environment: { SYNCMESH_NODE_ID: node-a, SYNCMESH_DB_PATH: /data/node.db, SYNCMESH_PEERS: http://node-b:8000,http://node-c:8000 }
+    ports: ["8001:8000"]
+    volumes: [node_a_data:/data]
+  node-b:
+    build: .
+    environment: { SYNCMESH_NODE_ID: node-b, SYNCMESH_DB_PATH: /data/node.db, SYNCMESH_PEERS: http://node-a:8000,http://node-c:8000 }
+    ports: ["8002:8000"]
+    volumes: [node_b_data:/data]
+  node-c:
+    build: .
+    environment: { SYNCMESH_NODE_ID: node-c, SYNCMESH_DB_PATH: /data/node.db, SYNCMESH_PEERS: http://node-a:8000,http://node-b:8000 }
+    ports: ["8003:8000"]
+    volumes: [node_c_data:/data]
+  frontend:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [node-a, node-b, node-c]
+volumes:
+  node_a_data:
+  node_b_data:
+  node_c_data:
