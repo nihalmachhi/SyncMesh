@@ -12,7 +12,7 @@ docker compose up --build
 
 Open http://localhost:5173. Select a node, add an item, and use **Sync now** to exchange operations. The dashboard refreshes node status every five seconds. API docs are available at http://localhost:8001/docs, ports 8002 and 8003 expose the other nodes.
 
-Stop with Ctrl+C or `docker compose down`. To erase node data too, run `docker compose down -v`. See [the illustrated guide](docs/SyncMesh_How_It_Works.pdf).
+Stop with Ctrl+C or `docker compose down`. To erase node data too, run `docker compose down -v`. The architecture and run flow are in [the project guide](docs/guide.md).
 
 ## How replication works
 
