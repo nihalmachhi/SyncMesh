@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/readme-icon.png" alt="SyncMesh icon" width="112" />
+</p>
+
 # SyncMesh
 
 SyncMesh is an educational offline-first inventory replication demo. Each node owns a separate SQLite database and can accept local inventory writes while peers are unreachable. Nodes exchange immutable operations when they can communicate.
