@@ -2,6 +2,24 @@
 
 SyncMesh is an educational offline-first inventory replication demo. Each node owns a separate SQLite database and can accept local inventory writes while peers are unreachable. Nodes exchange immutable operations when they can communicate.
 
+## How it works
+
+Each SyncMesh node commits local inventory changes as immutable operations in its own SQLite database. Peers exchange missing operations and apply them idempotently.
+
+```mermaid
+flowchart LR
+  A[Local inventory edit] --> B[Create sequenced operation]
+  B --> C[SQLite operation log and local view]
+  C --> D[Exchange version vectors with peers]
+  D --> E[Send missing operations]
+  E --> F[Validate order and ignore duplicates]
+  F --> G[Resolve concurrent field edits]
+  G --> H[Peer SQLite view]
+  H --> I[React Router dashboard]
+```
+
+Per-origin sequence numbers and version vectors identify gaps and missing changes. Quantity updates use additive deltas; concurrent field edits use a deterministic tie-break and record the resolution. This is an educational prototype without authentication or encrypted peer transport.
+
 ## Start the demo
 
 Requirements: Docker Desktop with its engine running.
@@ -50,3 +68,4 @@ Run one API node locally with `uv run uvicorn syncmesh.node.main:app --app-dir s
 ## Scope
 
 This is a learning prototype, not a production database. It has no authentication, encrypted transport, peer discovery, operation-log compaction, or full production conflict-review workflow. Keep demo endpoints on a trusted local network. No performance benchmarks are claimed.
+
