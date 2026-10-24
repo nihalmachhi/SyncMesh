@@ -11,15 +11,19 @@ SyncMesh is an educational offline-first inventory replication demo. Each node o
 Each SyncMesh node commits local inventory changes as immutable operations in its own SQLite database. Peers exchange missing operations and apply them idempotently.
 
 ```mermaid
-flowchart LR
-  A[Local inventory edit] --> B[Create sequenced operation]
-  B --> C[SQLite operation log and local view]
-  C --> D[Exchange version vectors with peers]
-  D --> E[Send missing operations]
-  E --> F[Validate order and ignore duplicates]
-  F --> G[Resolve concurrent field edits]
-  G --> H[Peer SQLite view]
-  H --> I[React Router dashboard]
+flowchart TD
+  A[Offline inventory edit on node] --> B[Create sequenced immutable operation]
+  B --> C[(Node-local SQLite operation log)]
+  B --> D[Update local inventory view]
+  C --> E[Exchange version vectors with reachable peers]
+  E --> F[Select missing operations]
+  F --> G[Validate per-origin order and ignore duplicates]
+  G --> H[Buffer gaps until earlier operations arrive]
+  H --> I[Merge quantity deltas and resolve field conflicts]
+  I --> J[(Peer operation log and inventory view)]
+  J --> E
+  D --> K[React Router dashboard]
+  J --> K
 ```
 
 Per-origin sequence numbers and version vectors identify gaps and missing changes. Quantity updates use additive deltas; concurrent field edits use a deterministic tie-break and record the resolution. This is an educational prototype without authentication or encrypted peer transport.
