@@ -1,0 +1,180 @@
+{
+  "expected": {
+    "deleted": false,
+    "field_registers": {
+      "category": {
+        "hlc": {
+          "logical": 1,
+          "physical_ms": 1800000000000
+        },
+        "operation_id": "node-a:1",
+        "origin_node_id": "node-a",
+        "value": "Grains",
+        "vector": {
+          "node-a": 1
+        }
+      },
+      "name": {
+        "hlc": {
+          "logical": 1,
+          "physical_ms": 1800000000200
+        },
+        "operation_id": "node-c:1",
+        "origin_node_id": "node-c",
+        "value": "Whole grain rice",
+        "vector": {
+          "node-a": 1,
+          "node-c": 1
+        }
+      },
+      "price": {
+        "hlc": {
+          "logical": 1,
+          "physical_ms": 1800000000000
+        },
+        "operation_id": "node-a:1",
+        "origin_node_id": "node-a",
+        "value": 4.5,
+        "vector": {
+          "node-a": 1
+        }
+      }
+    },
+    "fields": {
+      "category": "Grains",
+      "name": "Whole grain rice",
+      "price": 4.5
+    },
+    "pn_counter": {
+      "node-a": {
+        "negative": 0,
+        "positive": 10
+      },
+      "node-b": {
+        "negative": 0,
+        "positive": 5
+      },
+      "node-c": {
+        "negative": 2,
+        "positive": 0
+      }
+    },
+    "quantity": 13
+  },
+  "operations": [
+    {
+      "base_vector": {},
+      "entity_id": "offline-rice",
+      "hlc": {
+        "logical": 1,
+        "physical_ms": 1800000000000
+      },
+      "op_type": "create",
+      "operation_id": "node-a:1",
+      "origin_node_id": "node-a",
+      "origin_seq": 1,
+      "payload": {
+        "fields": {
+          "category": "Grains",
+          "name": "Rice",
+          "price": 4.5
+        },
+        "quantity": 10
+      },
+      "wall_clock": "2027-01-15T08:00:00Z"
+    },
+    {
+      "base_vector": {
+        "node-a": 1
+      },
+      "entity_id": "offline-rice",
+      "hlc": {
+        "logical": 1,
+        "physical_ms": 1800000000100
+      },
+      "op_type": "set_field",
+      "operation_id": "node-b:1",
+      "origin_node_id": "node-b",
+      "origin_seq": 1,
+      "payload": {
+        "fields": {
+          "name": "Brown rice"
+        }
+      },
+      "wall_clock": "2027-01-15T08:00:00.100000Z"
+    },
+    {
+      "base_vector": {
+        "node-a": 1
+      },
+      "entity_id": "offline-rice",
+      "hlc": {
+        "logical": 1,
+        "physical_ms": 1800000000200
+      },
+      "op_type": "set_field",
+      "operation_id": "node-c:1",
+      "origin_node_id": "node-c",
+      "origin_seq": 1,
+      "payload": {
+        "fields": {
+          "name": "Whole grain rice"
+        }
+      },
+      "wall_clock": "2027-01-15T08:00:00.200000Z"
+    },
+    {
+      "base_vector": {
+        "node-a": 1,
+        "node-b": 1
+      },
+      "entity_id": "offline-rice",
+      "hlc": {
+        "logical": 2,
+        "physical_ms": 1800000000300
+      },
+      "op_type": "adjust_quantity",
+      "operation_id": "node-b:2",
+      "origin_node_id": "node-b",
+      "origin_seq": 2,
+      "payload": {
+        "delta": 5
+      },
+      "wall_clock": "2027-01-15T08:00:00.300000Z"
+    },
+    {
+      "base_vector": {
+        "node-a": 1,
+        "node-c": 1
+      },
+      "entity_id": "offline-rice",
+      "hlc": {
+        "logical": 2,
+        "physical_ms": 1800000000250
+      },
+      "op_type": "adjust_quantity",
+      "operation_id": "node-c:2",
+      "origin_node_id": "node-c",
+      "origin_seq": 2,
+      "payload": {
+        "delta": -2
+      },
+      "wall_clock": "2027-01-15T08:00:00.250000Z"
+    }
+  ],
+  "seeded_random": {
+    "mulberry32_first_8": [
+      0.6011037519201636,
+      0.44829055899754167,
+      0.8524657934904099,
+      0.6697340414393693,
+      0.17481389874592423,
+      0.5265925421845168,
+      0.2732279943302274,
+      0.6247446539346129
+    ],
+    "seed": 42
+  },
+  "source": "src/syncmesh/domain/apply.py",
+  "tolerance": 0
+}

@@ -1,0 +1,5 @@
+node_modules
+dist
+coverage
+src/data/results.generated.json
+src/features/simulator/__fixtures__/merge.json

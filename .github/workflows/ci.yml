@@ -42,3 +42,32 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --all-extras
+      - run: make site-fixtures
+      - run: git diff --exit-code -- reports/reproduce.json site/src/data/results.generated.json site/src/features/simulator/__fixtures__/merge.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - working-directory: site
+        run: npm ci
+      - working-directory: site
+        run: npm run test:coverage
+      - working-directory: site
+        run: npm run lint
+      - working-directory: site
+        run: npm run format:check
+      - working-directory: site
+        run: npm run build
