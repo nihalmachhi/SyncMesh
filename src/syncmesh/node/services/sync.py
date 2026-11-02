@@ -8,11 +8,14 @@ import random
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import cast
 
 import httpx
 
 from syncmesh.node.storage.repository import ReceiveOutcome, Repository
-from syncmesh.protocol.messages import ExchangeRequest, ExchangeResponse
+from syncmesh.protocol.digest import differing_ranges
+from syncmesh.protocol.messages import ExchangeRequest, ExchangeResponse, NodeSnapshot
+from syncmesh.protocol.optimize import select_operations
 
 LOGGER = logging.getLogger(__name__)
 PAGE_SIZE = 500
@@ -28,12 +31,15 @@ class Synchronizer:
         peer_urls: tuple[str, ...],
         interval: float,
         peer_secret: str | None = None,
+        byte_budget: int = 65_536,
         client_factory: Callable[..., httpx.AsyncClient] = httpx.AsyncClient,
         random_source: random.Random | None = None,
     ) -> None:
         self.repo = repo
         self.peer_urls = peer_urls
         self.interval = interval
+        self.current_interval = interval
+        self.byte_budget = byte_budget
         self.peer_secret = peer_secret
         self.client_factory = client_factory
         self.random = random_source or random.SystemRandom()
@@ -64,12 +70,30 @@ class Synchronizer:
             "X-SyncMesh-Signature": signature,
         }
 
-    async def _get_vector(self, client: httpx.AsyncClient, url: str) -> dict[str, int]:
-        """Read a peer vector with authentication for deployments that require it."""
+    async def _get_peer_state(self, client: httpx.AsyncClient, url: str) -> dict[str, object]:
+        """Read a peer vector and the compacted prefix it cannot replay from its log."""
         request = client.build_request("GET", url + "/sync/vector", headers=self._headers())
         response = await client.send(request)
         response.raise_for_status()
-        return response.json()["vector"]
+        return response.json()
+
+    async def _send_snapshot(
+        self, client: httpx.AsyncClient, url: str, snapshot: NodeSnapshot
+    ) -> None:
+        """Send a signed materialized snapshot to a stale peer."""
+        request = client.build_request(
+            "POST", url + "/sync/snapshot", json=snapshot.model_dump(mode="json")
+        )
+        request.headers.update(self._headers(request.content))
+        response = await client.send(request)
+        response.raise_for_status()
+
+    async def _receive_snapshot(self, client: httpx.AsyncClient, url: str) -> NodeSnapshot:
+        """Fetch a peer snapshot when its compacted prefix is ahead of local history."""
+        request = client.build_request("GET", url + "/sync/snapshot", headers=self._headers())
+        response = await client.send(request)
+        response.raise_for_status()
+        return NodeSnapshot.model_validate(response.json())
 
     async def _post_exchange(
         self, client: httpx.AsyncClient, url: str, request_body: ExchangeRequest
@@ -90,10 +114,31 @@ class Synchronizer:
         conflicts_before = len(self.repo.conflicts())
         buffered = 0
         lag = 0
+        local_digest = self.repo.operation_digest()
+        digest_response = await client.get(url + "/sync/digest", headers=self._headers())
+        digest_response.raise_for_status()
+        digest_mismatches = differing_ranges(local_digest, digest_response.json().get("ranges", {}))
+        remote_state = await self._get_peer_state(client, url)
+        local_vector = self.repo.stats()["vector"]
+        local_compacted = self.repo.compacted_vector()
+        remote_vector = cast(dict[str, int], remote_state.get("vector", {}))
+        remote_compacted = cast(dict[str, int], remote_state.get("compacted_vector", {}))
+        if any(
+            local_vector.get(origin, 0) < sequence for origin, sequence in remote_compacted.items()
+        ):
+            snapshot = await self._receive_snapshot(client, url)
+            self.repo.apply_snapshot(snapshot)
+        if any(
+            remote_vector.get(origin, 0) < sequence for origin, sequence in local_compacted.items()
+        ):
+            await self._send_snapshot(client, url, self.repo.export_snapshot())
+        if local_compacted or remote_compacted:
+            remote_state = await self._get_peer_state(client, url)
         while True:
-            remote_vector = await self._get_vector(client, url)
-            outgoing = self.repo.since(remote_vector, PAGE_SIZE)
-            lag = len(outgoing)
+            remote_vector = cast(dict[str, int], remote_state.get("vector", {}))
+            candidates = self.repo.since(remote_vector, PAGE_SIZE)
+            outgoing = select_operations(candidates, remote_vector, self.byte_budget)
+            lag = len(candidates)
             sender_vector = self.repo.stats()["vector"]
             request_body = ExchangeRequest(
                 sender_node_id=self.repo.node_id,
@@ -107,7 +152,12 @@ class Synchronizer:
             duplicates += response.duplicates_ignored
             duplicates += sum(outcome is ReceiveOutcome.DUPLICATE for outcome in outcomes)
             buffered += sum(outcome is ReceiveOutcome.BUFFERED for outcome in outcomes)
-            if len(outgoing) < PAGE_SIZE and len(response.operations) < PAGE_SIZE:
+            remote_state = await self._get_peer_state(client, url)
+            remote_vector = cast(dict[str, int], remote_state.get("vector", {}))
+            local_vector = self.repo.stats()["vector"]
+            more_to_send = bool(self.repo.since(remote_vector, PAGE_SIZE))
+            more_to_receive = bool(self.repo.since(local_vector, PAGE_SIZE))
+            if not more_to_send and not more_to_receive:
                 break
 
         duration = (time.perf_counter() - started_clock) * 1000
@@ -121,6 +171,8 @@ class Synchronizer:
             "ops_sent": sent,
             "ops_received": received,
             "buffered": buffered,
+            "duration_ms": duration,
+            "digest_mismatches": len(digest_mismatches),
         }
         self._failures.pop(url, None)
         self._retry_at.pop(url, None)
@@ -179,13 +231,19 @@ class Synchronizer:
                 *(self._exchange_peer(client, url) for url in eligible), return_exceptions=True
             )
             totals = {"sent": 0, "received": 0, "duplicates": 0, "buffered": 0}
+            had_failure = False
             for url, result in zip(eligible, results, strict=True):
                 if isinstance(result, BaseException):
+                    had_failure = True
                     error = result if isinstance(result, Exception) else RuntimeError(str(result))
                     self._record_failure(url, error)
                     continue
                 for key in totals:
                     totals[key] += int(result[key])
+            if had_failure:
+                self.current_interval = min(max(self.interval, self.current_interval + 0.5), 60.0)
+            else:
+                self.current_interval = max(min(self.interval, self.current_interval * 0.9), 0.5)
             return totals
         finally:
             if owned_client:
@@ -196,4 +254,5 @@ class Synchronizer:
         async with self.client_factory(timeout=3) as client:
             while True:
                 await self.exchange(client)
-                await asyncio.sleep(self.interval)
+                jitter = self.random.uniform(0.9, 1.1)
+                await asyncio.sleep(self.current_interval * jitter)

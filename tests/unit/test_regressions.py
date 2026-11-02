@@ -103,6 +103,35 @@ def test_concurrent_same_field_uses_deterministic_winner(tmp_path):
         assert repository.items()[0]["name"] == expected
 
 
+def test_causal_descendant_does_not_overwrite_a_larger_concurrent_hlc(tmp_path):
+    """A later local edit remains a max-register, even beside a concurrent writer."""
+    create = make_operation(
+        "a", 1, "item-descendant", OpType.CREATE, {"fields": {"name": "Rice"}}, {}
+    )
+    first = make_operation(
+        "b", 1, "item-descendant", OpType.SET_FIELD, {"fields": {"name": "Brown"}}, {"a": 1}, 10
+    )
+    other = make_operation(
+        "c", 1, "item-descendant", OpType.SET_FIELD, {"fields": {"name": "White"}}, {"a": 1}, 20
+    )
+    descendant = make_operation(
+        "b",
+        2,
+        "item-descendant",
+        OpType.SET_FIELD,
+        {"fields": {"name": "Red"}},
+        {"a": 1, "b": 1},
+        15,
+    )
+
+    for index, order in enumerate(((first, other, descendant), (other, first, descendant))):
+        repository = make_repo(tmp_path, f"descendant-{index}")
+        repository.receive(create)
+        for operation in order:
+            repository.receive(operation)
+        assert repository.items()[0]["name"] == "White"
+
+
 def test_conflict_pair_is_stored_open_with_both_values_in_either_order(tmp_path):
     """Replicas store the same open record for a concurrent winning/losing pair."""
     create = make_operation(
@@ -164,6 +193,48 @@ def test_causal_operation_waits_for_cross_origin_dependency(tmp_path):
     assert repository.receive(create)
     assert repository.items()[0]["name"] == "Brown Rice"
     assert repository.stats()["pending"] == 0
+
+
+def test_pn_counter_merges_independent_positive_and_negative_deltas(tmp_path):
+    """Per-origin positive and negative components sum identically across order."""
+    create = make_operation(
+        "a", 1, "item-counter", OpType.CREATE, {"fields": {"name": "Rice"}, "quantity": 10}, {}
+    )
+    add = make_operation("b", 1, "item-counter", OpType.ADJUST_QUANTITY, {"delta": 5}, {"a": 1})
+    subtract = make_operation(
+        "c", 1, "item-counter", OpType.ADJUST_QUANTITY, {"delta": -3}, {"a": 1}
+    )
+    for name, changes in (("counter-left", (add, subtract)), ("counter-right", (subtract, add))):
+        repository = make_repo(tmp_path, name)
+        assert repository.receive(create)
+        for operation in changes:
+            assert repository.receive(operation)
+        assert repository.items()[0]["stock"] == 12
+
+
+def test_tombstone_wins_over_a_concurrent_create_and_survives_restart(tmp_path):
+    """Concurrent creation cannot resurrect a deleted identity on a replica."""
+    deleted = make_operation("b", 1, "item-tombstone", OpType.DELETE, {}, {"a": 1}, 5)
+    created = make_operation(
+        "a", 1, "item-tombstone", OpType.CREATE, {"fields": {"name": "Rice"}}, {}, 1
+    )
+    repository = make_repo(tmp_path, "tombstone")
+
+    assert not repository.receive(deleted)
+    assert repository.receive(created)
+    assert repository.items() == []
+    repository.set_fields("item-tombstone", {"name": "Renamed"})
+    assert repository.items() == []
+
+    reopened = Repository(repository.db, "tombstone")
+    assert reopened.items() == []
+    with repository.db.connect() as connection:
+        row = connection.execute(
+            "SELECT deleted_vector, deleted_operation_id FROM entities WHERE entity_id=?",
+            ("item-tombstone",),
+        ).fetchone()
+    assert json.loads(row["deleted_vector"]) == {"a": 1, "b": 1}
+    assert row["deleted_operation_id"] == "b:1"
 
 
 def test_receive_rejects_operation_claiming_local_origin(tmp_path):
@@ -282,6 +353,42 @@ def test_admin_routes_require_bearer_token(tmp_path, monkeypatch):
             headers={"Authorization": "Bearer test-admin-token"},
         )
         assert response.status_code == 200
+
+
+def test_authenticated_write_routes_are_rate_limited(tmp_path):
+    """Repeated protected writes exceed the configured per-client quota."""
+    app = create_app(
+        Settings(
+            node_id="rate-limited",
+            db_path=str(tmp_path / "rate-limited.sqlite"),
+            peers="",
+            sync_interval_seconds=30,
+            rate_limit_requests=1,
+            rate_limit_window_seconds=60,
+        )
+    )
+    with TestClient(app) as client:
+        assert client.post("/admin/connectivity", json={"online": False}).status_code == 200
+        limited = client.post("/admin/connectivity", json={"online": True})
+        assert limited.status_code == 429
+        assert "Retry-After" in limited.headers
+
+
+def test_metrics_endpoint_exports_replication_gauges(tmp_path):
+    """Prometheus scraping includes operation, pending, and conflict gauges."""
+    app = create_app(
+        Settings(
+            node_id="metrics-node",
+            db_path=str(tmp_path / "metrics.sqlite"),
+            peers="",
+            sync_interval_seconds=30,
+        )
+    )
+    with TestClient(app) as client:
+        response = client.get("/metrics")
+        assert response.status_code == 200
+        assert "syncmesh_operations 0.0" in response.text
+        assert "syncmesh_pending_operations 0.0" in response.text
 
 
 def test_peer_exchange_requires_valid_timestamped_hmac(tmp_path, monkeypatch):

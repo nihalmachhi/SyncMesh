@@ -4,13 +4,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from syncmesh.core.rate_limit import enforce_rate_limit
 from syncmesh.core.security import require_admin
 from syncmesh.node.deps import get_repository, get_synchronizer
 from syncmesh.node.schemas import ConflictResolution, ConnectivityInput
 from syncmesh.node.services.sync import Synchronizer
 from syncmesh.node.storage.repository import Repository
 
-router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(
+    tags=["admin"], dependencies=[Depends(require_admin), Depends(enforce_rate_limit)]
+)
 
 
 @router.post("/admin/connectivity")

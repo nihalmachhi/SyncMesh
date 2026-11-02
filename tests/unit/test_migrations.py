@@ -18,4 +18,6 @@ def test_migration_adds_register_and_hlc_columns_to_legacy_schema(tmp_path):
         log_columns = {row["name"] for row in connection.execute("PRAGMA table_info(change_log)")}
         assert {"field_registers"} <= entity_columns
         assert {"hlc"} <= log_columns
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert {"pn_counter"} <= entity_columns
+        assert {"tombstone"} <= entity_columns
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4

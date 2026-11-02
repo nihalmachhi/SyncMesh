@@ -5,10 +5,10 @@ CREATE TABLE IF NOT EXISTS node_state (
 );
 CREATE TABLE IF NOT EXISTS entities (
  entity_id TEXT PRIMARY KEY, fields TEXT NOT NULL DEFAULT '{}',
- field_registers TEXT NOT NULL DEFAULT '{}',
+ field_registers TEXT NOT NULL DEFAULT '{}', pn_counter TEXT NOT NULL DEFAULT '{}',
  quantity INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0,
  entity_vector TEXT NOT NULL DEFAULT '{}', deleted_vector TEXT,
- deleted_operation_id TEXT, updated_at TEXT NOT NULL
+ deleted_operation_id TEXT, tombstone TEXT, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS change_log (
  local_id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL UNIQUE,
@@ -32,4 +32,7 @@ CREATE TABLE IF NOT EXISTS sync_log (
  sync_id TEXT PRIMARY KEY, peer_id TEXT NOT NULL, started_at TEXT NOT NULL,
  duration_ms REAL NOT NULL, ops_sent INTEGER NOT NULL, ops_received INTEGER NOT NULL,
  duplicates_ignored INTEGER NOT NULL, conflicts_found INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS peer_vectors (
+ peer_id TEXT PRIMARY KEY, vector TEXT NOT NULL, updated_at TEXT NOT NULL
 );

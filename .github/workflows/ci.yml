@@ -20,8 +20,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: uv sync --frozen --extra dev
+      - run: uv sync --frozen --all-extras
       - run: uv run pytest
+      - run: uv run python -m syncmesh.simulation.run --reproduce
+      - run: git diff --exit-code -- reports/reproduce.json
       - run: uv run ruff check .
       - run: uv run mypy src
       - run: docker compose config -q

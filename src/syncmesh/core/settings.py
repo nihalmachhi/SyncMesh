@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     admin_token: SecretStr | None = None
     peer_secret: SecretStr | None = None
     peer_auth_window_seconds: int = Field(default=300, ge=1, le=3600)
+    rate_limit_requests: int = Field(default=120, ge=1, le=10000)
+    rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    sync_byte_budget: int = Field(default=65536, ge=1024, le=10_000_000)
 
     @field_validator("admin_token", "peer_secret", mode="before")
     @classmethod

@@ -50,11 +50,11 @@ class AdjustQuantityPayload(BaseModel):
     delta: int
 
 
-OperationPayload = Annotated[
+type OperationPayload = Annotated[
     CreatePayload | SetFieldPayload | DeletePayload | AdjustQuantityPayload,
     Field(discriminator="kind"),
 ]
-_PAYLOAD_ADAPTER = TypeAdapter(OperationPayload)
+_PAYLOAD_ADAPTER: TypeAdapter[Any] = TypeAdapter(OperationPayload)  # type: ignore[arg-type]
 
 
 class Operation(BaseModel):
@@ -144,6 +144,13 @@ class ExchangeRequest(BaseModel):
     sender_vector: dict[str, int]
     operations: list[Operation] = Field(max_length=500)
 
+    @model_validator(mode="after")
+    def validate_sender_vector(self) -> "ExchangeRequest":
+        """Reject negative sequence numbers in peer version claims."""
+        if any(sequence < 0 for sequence in self.sender_vector.values()):
+            raise ValueError("sender vector sequence numbers must be non-negative")
+        return self
+
 
 class ExchangeResponse(BaseModel):
     """One bounded response page and peer exchange counters."""
@@ -155,3 +162,33 @@ class ExchangeResponse(BaseModel):
     buffered: int = 0
     conflicts_found: int
     duration_ms: float
+
+
+class SnapshotEntity(BaseModel):
+    """Materialized entity state carried during a stale-node bootstrap."""
+
+    model_config = ConfigDict(extra="forbid")
+    fields: dict[str, Any]
+    quantity: int
+    is_deleted: bool
+    entity_vector: dict[str, int]
+    field_registers: dict[str, dict[str, Any]]
+    pn_counter: dict[str, dict[str, int]]
+    tombstone: dict[str, Any] | None = None
+
+
+class NodeSnapshot(BaseModel):
+    """Validated state transfer for replicas behind compacted history."""
+
+    model_config = ConfigDict(extra="forbid")
+    node_id: str = Field(min_length=1, max_length=120)
+    vector: dict[str, int]
+    entities: dict[str, SnapshotEntity]
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_snapshot_vector(self) -> "NodeSnapshot":
+        """Reject malformed compaction baselines in a state transfer."""
+        if any(sequence < 0 for sequence in self.vector.values()):
+            raise ValueError("snapshot vector sequence numbers must be non-negative")
+        return self

@@ -1,0 +1,349 @@
+{
+  "bandwidth_selection": {
+    "byte_budget": 1800,
+    "fifo": {
+      "estimated_bytes": 1769,
+      "selected": 7
+    },
+    "synthetic": true,
+    "synthetic_operations": 18,
+    "value_per_byte": {
+      "estimated_bytes": 1726,
+      "operation_ids": [
+        "node-2:1",
+        "node-2:2",
+        "node-2:3",
+        "node-2:4",
+        "node-2:5",
+        "node-2:6",
+        "node-a:1"
+      ],
+      "selected": 7
+    }
+  },
+  "convergence": {
+    "all_converged": true,
+    "converged": 1000,
+    "failed_seeds": [],
+    "schedules_run": 1000,
+    "seed": 2026
+  },
+  "duplicate_detection": {
+    "calibration_pairs": 6,
+    "evaluation_pairs": 4,
+    "false_negative": 0,
+    "false_positive": 0,
+    "limitation": "Only ten fixed synthetic product pairs; this does not estimate real catalog accuracy.",
+    "precision": 1.0,
+    "recall": 1.0,
+    "synthetic": true,
+    "synthetic_pairs": 10,
+    "threshold": 0.623821,
+    "true_positive": 3
+  },
+  "generated_by": "uv run python -m syncmesh.simulation.run --reproduce",
+  "gossip": [
+    {
+      "approx_bytes_sent": 1152,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 6,
+      "seed": 42,
+      "strategy": "random",
+      "synthetic": true,
+      "topology": "ring"
+    },
+    {
+      "approx_bytes_sent": 1112,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 7,
+      "seed": 42,
+      "strategy": "round_robin",
+      "synthetic": true,
+      "topology": "ring"
+    },
+    {
+      "approx_bytes_sent": 1152,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 6,
+      "seed": 42,
+      "strategy": "push_pull",
+      "synthetic": true,
+      "topology": "ring"
+    },
+    {
+      "approx_bytes_sent": 1056,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 2,
+      "seed": 42,
+      "strategy": "random",
+      "synthetic": true,
+      "topology": "star"
+    },
+    {
+      "approx_bytes_sent": 1056,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 2,
+      "seed": 42,
+      "strategy": "round_robin",
+      "synthetic": true,
+      "topology": "star"
+    },
+    {
+      "approx_bytes_sent": 1056,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 2,
+      "seed": 42,
+      "strategy": "push_pull",
+      "synthetic": true,
+      "topology": "star"
+    },
+    {
+      "approx_bytes_sent": 1344,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 4,
+      "seed": 42,
+      "strategy": "random",
+      "synthetic": true,
+      "topology": "erdos_renyi"
+    },
+    {
+      "approx_bytes_sent": 1264,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 6,
+      "seed": 42,
+      "strategy": "round_robin",
+      "synthetic": true,
+      "topology": "erdos_renyi"
+    },
+    {
+      "approx_bytes_sent": 1472,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 3,
+      "seed": 42,
+      "strategy": "push_pull",
+      "synthetic": true,
+      "topology": "erdos_renyi"
+    },
+    {
+      "approx_bytes_sent": 1336,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 4,
+      "seed": 42,
+      "strategy": "random",
+      "synthetic": true,
+      "topology": "small_world"
+    },
+    {
+      "approx_bytes_sent": 1248,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 6,
+      "seed": 42,
+      "strategy": "round_robin",
+      "synthetic": true,
+      "topology": "small_world"
+    },
+    {
+      "approx_bytes_sent": 1496,
+      "components": [
+        [
+          "0",
+          "1",
+          "10",
+          "11",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ],
+      "converged": true,
+      "rounds_to_converge": 4,
+      "seed": 42,
+      "strategy": "push_pull",
+      "synthetic": true,
+      "topology": "small_world"
+    }
+  ],
+  "honest_reading": "Generated schedule and synthetic catalogue results measure algorithm behavior, not production performance or correctness for every possible execution.",
+  "synthetic": true
+}

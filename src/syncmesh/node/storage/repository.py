@@ -9,8 +9,9 @@ from uuid import uuid4
 from syncmesh.domain.apply import EntityState, apply_operation
 from syncmesh.node.storage import conflicts, entities, oplog
 from syncmesh.node.storage.db import Database
+from syncmesh.protocol.digest import range_digests
 from syncmesh.protocol.hlc import HLC, HybridLogicalClock
-from syncmesh.protocol.messages import Operation, OpType
+from syncmesh.protocol.messages import NodeSnapshot, Operation, OpType, SnapshotEntity
 from syncmesh.protocol.version_vector import merge
 
 
@@ -20,6 +21,17 @@ class ReceiveOutcome(StrEnum):
     APPLIED = "applied"
     BUFFERED = "buffered"
     DUPLICATE = "duplicate"
+
+
+def _register_key(register: dict) -> tuple[int, int, str, str]:
+    """Return the stable HLC/node/operation ordering used by register snapshots."""
+    hlc = register["hlc"]
+    return (
+        int(hlc["physical_ms"]),
+        int(hlc["logical"]),
+        str(register["origin_node_id"]),
+        str(register["operation_id"]),
+    )
 
 
 class Repository:
@@ -36,10 +48,13 @@ class Repository:
             ]
         self.clock = HybridLogicalClock(max(saved_hlcs, default=HLC(0, 0)))
 
-    @staticmethod
-    def vector(connection: sqlite3.Connection) -> dict[str, int]:
-        """Return the local operation-log vector."""
-        return oplog.vector(connection)
+    def vector(self, connection: sqlite3.Connection) -> dict[str, int]:
+        """Return the log vector plus any causally stable compacted prefix."""
+        row = connection.execute(
+            "SELECT node_vector FROM node_state WHERE node_id=?", (self.node_id,)
+        ).fetchone()
+        baseline = json.loads(row[0]) if row else {}
+        return merge(baseline, oplog.vector(connection))
 
     def create(self, fields: dict, quantity: int = 0, entity_id: str | None = None) -> str:
         """Create an inventory entity and return its ID."""
@@ -114,7 +129,7 @@ class Repository:
                         )
                     outcomes.append(ReceiveOutcome.DUPLICATE)
                     continue
-                have = oplog.sequence(connection, operation.origin_node_id)
+                have = self.vector(connection).get(operation.origin_node_id, 0)
                 if operation.origin_seq <= have:
                     outcomes.append(ReceiveOutcome.DUPLICATE)
                     continue
@@ -185,13 +200,14 @@ class Repository:
                 {operation.origin_node_id: operation.origin_seq},
             ),
             field_registers=next_state.field_registers,
+            pn_counter=next_state.pn_counter,
+            tombstone=next_state.tombstone,
         )
         entities.save(
             connection,
             operation.entity_id,
             next_state,
             now,
-            operation.operation_id if next_state.is_deleted else None,
         )
         if operation.origin_node_id != self.node_id:
             self.clock.observe(operation.hlc)
@@ -262,6 +278,167 @@ class Repository:
         """Return one bounded page of operations absent from a peer's vector."""
         with self.db.connect() as connection:
             return oplog.since(connection, version, limit)
+
+    def recent_operations(self, limit: int = 300) -> list[Operation]:
+        """Return a bounded recent log page for graph diagnostics."""
+        with self.db.connect() as connection:
+            return oplog.recent(connection, limit)
+
+    def operation_digest(self, range_size: int = 128) -> dict:
+        """Return compact content hashes for the bounded current operation log."""
+        with self.db.connect() as connection:
+            operations = oplog.recent(connection, 100_000)
+        return range_digests(operations, range_size)
+
+    def compacted_vector(self) -> dict[str, int]:
+        """Return the stable prefix already summarized by the materialized snapshot."""
+        with self.db.connect() as connection:
+            row = connection.execute(
+                "SELECT node_vector FROM node_state WHERE node_id=?", (self.node_id,)
+            ).fetchone()
+            return json.loads(row[0]) if row else {}
+
+    def record_peer_vector(self, peer_id: str, peer_vector: dict[str, int]) -> None:
+        """Record the operation prefix a peer reports having received."""
+        with self.db.connect() as connection:
+            connection.execute(
+                "INSERT INTO peer_vectors(peer_id, vector, updated_at) VALUES(?,?,?) "
+                "ON CONFLICT(peer_id) DO UPDATE SET vector=excluded.vector, "
+                "updated_at=excluded.updated_at",
+                (peer_id, json.dumps(peer_vector, sort_keys=True), datetime.now(UTC).isoformat()),
+            )
+
+    def compact(self, peer_ids: tuple[str, ...]) -> dict:
+        """Delete log entries acknowledged by every configured peer."""
+        if not peer_ids:
+            raise ValueError("compaction requires at least one configured peer")
+        with self.db.connect() as connection:
+            rows = {
+                row["peer_id"]: json.loads(row["vector"])
+                for row in connection.execute("SELECT peer_id, vector FROM peer_vectors").fetchall()
+            }
+            if any(peer_id not in rows for peer_id in peer_ids):
+                return {
+                    "removed": 0,
+                    "stable_vector": {},
+                    "waiting_for": [p for p in peer_ids if p not in rows],
+                }
+            current = self.vector(connection)
+            stable = {
+                origin: min(
+                    peer_vectors.get(origin, 0) for peer_vectors in (rows[p] for p in peer_ids)
+                )
+                for origin in current
+            }
+            previous = json.loads(
+                connection.execute(
+                    "SELECT node_vector FROM node_state WHERE node_id=?", (self.node_id,)
+                ).fetchone()[0]
+            )
+            baseline = merge(previous, stable)
+            removed = 0
+            for origin, sequence in stable.items():
+                cursor = connection.execute(
+                    "DELETE FROM change_log WHERE origin_node_id=? AND origin_seq<=?",
+                    (origin, sequence),
+                )
+                removed += cursor.rowcount
+            connection.execute(
+                "UPDATE node_state SET node_vector=? WHERE node_id=?",
+                (json.dumps(baseline, sort_keys=True), self.node_id),
+            )
+        return {"removed": removed, "stable_vector": baseline, "waiting_for": []}
+
+    def export_snapshot(self) -> NodeSnapshot:
+        """Export materialized state and the vector a stale peer can bootstrap from."""
+        with self.db.connect() as connection:
+            rows = connection.execute(
+                "SELECT entity_id FROM entities ORDER BY entity_id"
+            ).fetchall()
+            snapshot_entities = {}
+            for row in rows:
+                state = entities.get(connection, row["entity_id"])
+                snapshot_entities[row["entity_id"]] = SnapshotEntity(
+                    fields=state.fields,
+                    quantity=state.quantity,
+                    is_deleted=state.is_deleted,
+                    entity_vector=state.entity_vector or {},
+                    field_registers=state.field_registers,
+                    pn_counter=state.pn_counter,
+                    tombstone=state.tombstone,
+                )
+            return NodeSnapshot(
+                node_id=self.node_id,
+                vector=self.vector(connection),
+                entities=snapshot_entities,
+                conflicts=conflicts.list_all(connection),
+            )
+
+    def apply_snapshot(self, snapshot: NodeSnapshot) -> None:
+        """Merge an authenticated peer snapshot into the local materialized state."""
+        if snapshot.node_id == self.node_id:
+            raise ValueError("snapshot cannot claim the local node identity")
+        with self.db.connect() as connection:
+            for entity_id, incoming in snapshot.entities.items():
+                current = entities.get(connection, entity_id)
+                registers = dict(current.field_registers)
+                for field_name, candidate in incoming.field_registers.items():
+                    present = registers.get(field_name)
+                    if present is None or _register_key(candidate) > _register_key(present):
+                        registers[field_name] = candidate
+                counter = {node: dict(parts) for node, parts in current.pn_counter.items()}
+                for node, parts in incoming.pn_counter.items():
+                    existing = counter.setdefault(node, {"positive": 0, "negative": 0})
+                    for component in ("positive", "negative"):
+                        existing[component] = max(existing[component], parts[component])
+                tombstone = current.tombstone
+                if incoming.tombstone and (
+                    tombstone is None
+                    or _register_key(incoming.tombstone) > _register_key(tombstone)
+                ):
+                    tombstone = incoming.tombstone
+                merged_fields = {name: register["value"] for name, register in registers.items()}
+                quantity = sum(parts["positive"] - parts["negative"] for parts in counter.values())
+                merged_state = EntityState(
+                    fields=merged_fields,
+                    quantity=quantity,
+                    is_deleted=current.is_deleted or incoming.is_deleted or tombstone is not None,
+                    entity_vector=merge(current.entity_vector or {}, incoming.entity_vector),
+                    field_registers=registers,
+                    pn_counter=counter,
+                    tombstone=tombstone,
+                )
+                entities.save(connection, entity_id, merged_state, datetime.now(UTC))
+            for conflict in snapshot.conflicts:
+                connection.execute(
+                    "INSERT OR IGNORE INTO conflicts(conflict_id, entity_id, field, operation_ids, "
+                    "policy, status, resolution, detected_at) VALUES(?,?,?,?,?,?,?,?)",
+                    tuple(
+                        conflict[key]
+                        for key in (
+                            "conflict_id",
+                            "entity_id",
+                            "field",
+                            "operation_ids",
+                            "policy",
+                            "status",
+                            "resolution",
+                            "detected_at",
+                        )
+                    ),
+                )
+            state = connection.execute(
+                "SELECT node_vector, local_seq FROM node_state WHERE node_id=?", (self.node_id,)
+            ).fetchone()
+            baseline = merge(json.loads(state["node_vector"]), snapshot.vector)
+            connection.execute(
+                "UPDATE node_state SET node_vector=?, local_seq=? WHERE node_id=?",
+                (
+                    json.dumps(baseline, sort_keys=True),
+                    max(state["local_seq"], baseline.get(self.node_id, 0)),
+                    self.node_id,
+                ),
+            )
 
     def record_sync(
         self,

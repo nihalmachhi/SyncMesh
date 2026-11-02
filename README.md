@@ -52,6 +52,11 @@ Quantity changes use additive deltas, so independent updates commute. Field edit
 | Claim | Evidence |
 |---|---|
 | Concurrent field edits converge across delivery permutations and duplicate delivery | Randomized property test: `tests/property/test_convergence.py` |
+| Seeded operation schedules converge under reordering and duplication | Generated report: `reports/reproduce.json` (`make reproduce`) |
+| Peer graph and causal history summaries are deterministic | `tests/unit/test_graphs.py` |
+| Duplicate suggestions are evaluated on synthetic labeled examples | `reports/reproduce.json`; ten pairs only, not real catalog accuracy |
+| Peer log digests identify changed and absent ranges | `tests/unit/test_digest.py` |
+| Compaction waits for every peer and stale peers bootstrap from snapshots | `tests/unit/test_snapshot.py`, `tests/unit/test_sync.py` |
 | More than one operation page can synchronize | In-process HTTP integration test: `tests/unit/test_sync.py` |
 | Peer batches are validated atomically and bounded to 500 operations | `tests/unit/test_regressions.py` |
 | Operations waiting on missing causal dependencies are buffered | `tests/unit/test_regressions.py` |
@@ -64,6 +69,9 @@ Quantity changes use additive deltas, so independent updates commute. Field edit
 - `src/syncmesh/protocol`: validated operation messages and vector-clock functions.
 - `src/syncmesh/domain`: pure inventory state transitions.
 - `src/syncmesh/core/security.py`: admin bearer and peer HMAC checks.
+- `src/syncmesh/graphs`: causal history, antichain, and peer partition analysis.
+- `src/syncmesh/simulation`: seeded operation schedules and report generation.
+- `src/syncmesh/nlp` and `src/syncmesh/vision`: optional local catalog and image helpers.
 - `src/syncmesh/node/api.py`: FastAPI app factory and router registration.
 - `src/syncmesh/node/routers`: item, sync, admin, and event endpoints.
 - `src/syncmesh/node/services/sync.py`: asynchronous peer exchange loop.
@@ -91,7 +99,7 @@ Run one API node locally with `uv run uvicorn syncmesh.node.main:create_app --fa
 
 ## Scope
 
-This is a learning prototype, not a production database. It does not provide encrypted transport, peer discovery, or operation-log compaction. The optional authentication mechanisms do not replace TLS or a production identity system. Keep demo endpoints on a trusted local network. No performance benchmarks are claimed.
+This is a learning prototype, not a production database. It does not provide encrypted transport or peer discovery. Hash-range digests and byte-budgeted causal selection reduce redundant exchanges in the model; simulator byte counts are estimates, not measured HTTP performance. NLP and vision are optional local suggestions, not automatic inventory edits. Optional authentication does not replace TLS or a production identity system. Keep demo endpoints on a trusted local network.
 
 ## License
 

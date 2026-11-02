@@ -76,6 +76,14 @@ def since(
     return operations
 
 
+def recent(connection: sqlite3.Connection, limit: int) -> list[Operation]:
+    """Load the most recent log page in chronological order for graph inspection."""
+    rows = connection.execute(
+        "SELECT * FROM change_log ORDER BY local_id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [operation_from_row(row) for row in reversed(rows)]
+
+
 def operation_from_row(row: sqlite3.Row) -> Operation:
     """Rebuild an operation, including compatibility with pre-HLC log rows."""
     values = {

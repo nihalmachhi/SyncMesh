@@ -36,7 +36,9 @@ async def test_sync_paginates_more_than_one_wire_page(tmp_path):
         transport = httpx.ASGITransport(app=target_app)
         return httpx.AsyncClient(transport=transport, base_url="http://target", **kwargs)
 
-    syncer = Synchronizer(source, ("http://target",), 1, client_factory=build_client)
+    syncer = Synchronizer(
+        source, ("http://target",), 1, byte_budget=5000, client_factory=build_client
+    )
     async with build_client() as client:
         result = await syncer.exchange(client)
 
@@ -45,6 +47,7 @@ async def test_sync_paginates_more_than_one_wire_page(tmp_path):
     assert target_repository.stats()["operations"] == 511
     assert target_repository.items()[0]["stock"] == 520
     assert syncer.peer_status["http://target"]["online"] is True
+    assert syncer.current_interval < syncer.interval
 
 
 @pytest.mark.asyncio
@@ -67,3 +70,37 @@ async def test_sync_failure_is_logged_and_backed_off(tmp_path):
     assert syncer.peer_status["http://peer"]["online"] is False
     assert "503" in str(syncer.peer_status["http://peer"]["last_error"])
     assert syncer._retry_at["http://peer"] > 0
+    assert syncer.current_interval > syncer.interval
+
+
+@pytest.mark.asyncio
+async def test_sync_bootstraps_a_peer_behind_compacted_history(tmp_path):
+    """A peer with no retained log receives a snapshot and resumes from its vector."""
+    source = build_repository(tmp_path, "source-compact")
+    item_id = source.create({"name": "Tea", "category": "Drinks"}, quantity=12)
+    source.adjust(item_id, 3)
+    source.record_peer_vector("target", source.stats()["vector"])
+    assert source.compact(("target",))["removed"] == 2
+
+    target_app = create_app(
+        Settings(
+            node_id="target",
+            db_path=str(tmp_path / "target-compact.sqlite"),
+            peers="",
+            sync_interval_seconds=30,
+        )
+    )
+
+    def build_client() -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=target_app), base_url="http://target"
+        )
+
+    syncer = Synchronizer(source, ("http://target",), 1, client_factory=build_client)
+    async with build_client() as client:
+        await syncer.exchange(client)
+
+    target_repository = target_app.state.repository
+    assert target_repository.items()[0]["name"] == "Tea"
+    assert target_repository.items()[0]["stock"] == 15
+    assert target_repository.stats()["vector"] == source.stats()["vector"]

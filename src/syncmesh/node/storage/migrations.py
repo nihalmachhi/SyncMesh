@@ -10,6 +10,21 @@ def migrate(connection: sqlite3.Connection) -> None:
         _add_column(connection, "entities", "field_registers", "TEXT NOT NULL DEFAULT '{}'")
         _add_column(connection, "change_log", "hlc", "TEXT NOT NULL DEFAULT ''")
         connection.execute("PRAGMA user_version = 1")
+        version = 1
+    if version < 2:
+        _add_column(connection, "entities", "pn_counter", "TEXT NOT NULL DEFAULT '{}'")
+        connection.execute("PRAGMA user_version = 2")
+        version = 2
+    if version < 3:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS peer_vectors("
+            "peer_id TEXT PRIMARY KEY, vector TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute("PRAGMA user_version = 3")
+        version = 3
+    if version < 4:
+        _add_column(connection, "entities", "tombstone", "TEXT")
+        connection.execute("PRAGMA user_version = 4")
 
 
 def _add_column(connection: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
