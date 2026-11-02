@@ -41,7 +41,7 @@ jobs:
       - run: uv sync --frozen --all-extras
       - run: make site-fixtures
       - run: git diff --exit-code -- reports/reproduce.json site/src/data/results.generated.json site/src/features/simulator/__fixtures__/merge.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
