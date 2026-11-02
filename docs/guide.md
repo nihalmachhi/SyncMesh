@@ -10,17 +10,17 @@ Requirements: Docker Desktop with its engine running.
 docker compose up --build
 ```
 
-Open the dashboard at <http://localhost:5173>. The node APIs are available on ports 8001, 8002, and 8003. Stop the lab with `docker compose down`; remove demo databases only with `docker compose down -v`.
+The node APIs are available at <http://localhost:8001/docs>, <http://localhost:8002/docs>, and <http://localhost:8003/docs>. The separate static walkthrough and browser-only simulator are at <https://nihalmachhi.github.io/SyncMesh/>. Stop the API lab with `docker compose down`; remove demo databases only with `docker compose down -v`.
 
 ## Follow a change
 
-1. The dashboard sends an inventory request to one node.
+1. A client sends an inventory request to one node.
 2. The node appends an operation and updates its local SQLite view in a transaction.
 3. The synchronizer compares peer version vectors and exchanges missing operations.
 4. A replica ignores duplicate operation IDs and buffers gaps in an origin's sequence.
 5. Field changes use causal context plus a deterministic tie-break; stock changes apply signed deltas.
 
-The API and storage implementation live under `src/syncmesh/node/`; wire message and vector-clock types live under `src/syncmesh/protocol/`. The dashboard is in `dashboard/`. Keep the demo bound to a trusted network: this prototype does not yet authenticate peers or administrators.
+The API and storage implementation live under `src/syncmesh/node/`; wire message and vector-clock types live under `src/syncmesh/protocol/`. The static walkthrough in `site/` is independent of the API. Keep the node ports bound to a trusted network: this prototype does not yet authenticate peers or administrators.
 
 ## Development
 

@@ -24,7 +24,6 @@ flowchart LR
   E --> F[Validate order and ignore duplicates]
   F --> G[Resolve concurrent field edits]
   G --> H[Peer SQLite view]
-  H --> I[React Router dashboard]
 ```
 
 Per-origin sequence numbers and version vectors identify gaps and missing changes. Field updates use per-field hybrid logical clock registers. Peer and admin endpoints support timestamped HMAC and bearer-token checks when secrets are configured. This remains an educational lab; use TLS for traffic outside a trusted network.
@@ -37,7 +36,7 @@ Requirements: Docker Desktop with its engine running.
 docker compose up --build
 ```
 
-Open http://localhost:5173. Select a node, add an item, and use **Sync now** to exchange operations. The dashboard refreshes node status every five seconds. API docs are available at http://localhost:8001/docs, ports 8002 and 8003 expose the other nodes.
+The three API nodes are available at http://localhost:8001/docs, http://localhost:8002/docs, and http://localhost:8003/docs. The browser walkthrough at [the project site](https://nihalmachhi.github.io/SyncMesh/) is a separate local simulator; it does not connect to these APIs. To run it locally, use `cd site`, `npm ci`, and `npm run dev`.
 
 Stop with Ctrl+C or `docker compose down`. To erase node data too, run `docker compose down -v`. The architecture and run flow are in [the project guide](docs/guide.md).
 
@@ -82,7 +81,6 @@ Quantity changes use additive deltas, so independent updates commute. Field edit
 - `src/syncmesh/node/routers`: item, sync, admin, and event endpoints.
 - `src/syncmesh/node/services/sync.py`: asynchronous peer exchange loop.
 - `src/syncmesh/node/storage`: per-node SQLite lifecycle, schema, and repository.
-- `dashboard/src`: React + TypeScript dashboard using React Router.
 - `site/src`: the responsive project overview and lazy-loaded browser simulator.
 - `tests/unit`, `tests/property`: API, migration, sync, regression, and convergence checks.
 - `docs`: project learning guide.
@@ -97,8 +95,10 @@ uv run pytest
 uv run ruff check src tests
 uv run mypy src
 docker compose config -q
-cd dashboard
+cd site
 npm ci
+npm run test:coverage
+npm run lint
 npm run build
 ```
 

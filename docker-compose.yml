@@ -32,10 +32,6 @@ services:
       SYNCMESH_PEER_SECRET: ${SYNCMESH_PEER_SECRET:-}
     ports: ["8003:8000"]
     volumes: [node_c_data:/data]
-  dashboard:
-    build: ./dashboard
-    ports: ["5173:80"]
-    depends_on: [node-a, node-b, node-c]
 volumes:
   node_a_data:
   node_b_data:

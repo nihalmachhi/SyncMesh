@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     db_path: str = "data/node-a/node.db"
     peers: str = ""
     sync_interval_seconds: float = Field(default=5, gt=0)
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = ""
     environment: Literal["dev", "test", "production"] = "dev"
     admin_token: SecretStr | None = None
     peer_secret: SecretStr | None = None
