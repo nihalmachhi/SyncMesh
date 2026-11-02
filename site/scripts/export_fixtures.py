@@ -96,7 +96,11 @@ def main() -> None:
         json.dumps(build_fixture(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     report = reproduce()
-    print(f"Updated {fixture_dir / 'merge.json'} and generated site results ({report['convergence']['converged']} schedules).")
+    schedules = report["convergence"]["converged"]
+    print(
+        f"Updated {fixture_dir / 'merge.json'} and generated site results "
+        f"({schedules} schedules)."
+    )
 
 
 if __name__ == "__main__":
