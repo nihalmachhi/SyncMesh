@@ -5,6 +5,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from syncmesh.node.storage.migrations import migrate
+
 
 class Database:
     """Own a single node's private SQLite file."""
@@ -18,6 +20,7 @@ class Database:
         schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
         with self.connect() as connection:
             connection.executescript(schema)
+            migrate(connection)
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

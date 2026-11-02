@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 from syncmesh.domain.apply import EntityState
 
@@ -12,11 +12,28 @@ def get(connection: sqlite3.Connection, entity_id: str) -> EntityState:
     row = connection.execute("SELECT * FROM entities WHERE entity_id=?", (entity_id,)).fetchone()
     if row is None:
         return EntityState(fields={})
+    fields = json.loads(row["fields"])
+    field_registers = json.loads(row["field_registers"])
+    if not field_registers and fields:
+        legacy_timestamp = datetime.fromisoformat(row["updated_at"]).astimezone(UTC)
+        legacy_hlc = {"physical_ms": int(legacy_timestamp.timestamp() * 1000), "logical": 0}
+        legacy_vector = json.loads(row["entity_vector"])
+        field_registers = {
+            name: {
+                "value": value,
+                "vector": legacy_vector,
+                "hlc": legacy_hlc,
+                "origin_node_id": "legacy",
+                "operation_id": f"legacy:{entity_id}",
+            }
+            for name, value in fields.items()
+        }
     return EntityState(
-        fields=json.loads(row["fields"]),
+        fields=fields,
         quantity=int(row["quantity"]),
         is_deleted=bool(row["is_deleted"]),
         entity_vector=json.loads(row["entity_vector"]),
+        field_registers=field_registers,
     )
 
 
@@ -31,15 +48,18 @@ def save(
     entity_vector = state.entity_vector or {}
     deleted = state.is_deleted
     connection.execute(
-        "INSERT INTO entities(entity_id, fields, quantity, is_deleted, entity_vector, "
-        "deleted_vector, deleted_operation_id, updated_at) VALUES(?,?,?,?,?,?,?,?) "
+        "INSERT INTO entities(entity_id, fields, field_registers, quantity, is_deleted, "
+        "entity_vector, deleted_vector, deleted_operation_id, updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(entity_id) DO UPDATE SET fields=excluded.fields, "
+        "field_registers=excluded.field_registers, "
         "quantity=excluded.quantity, is_deleted=excluded.is_deleted, "
         "entity_vector=excluded.entity_vector, deleted_vector=excluded.deleted_vector, "
         "deleted_operation_id=excluded.deleted_operation_id, updated_at=excluded.updated_at",
         (
             entity_id,
             json.dumps(state.fields, sort_keys=True),
+            json.dumps(state.field_registers, sort_keys=True),
             state.quantity,
             int(deleted),
             json.dumps(entity_vector, sort_keys=True),
@@ -55,7 +75,15 @@ def list_items(connection: sqlite3.Connection) -> list[dict]:
     rows = connection.execute(
         "SELECT * FROM entities WHERE is_deleted=0 ORDER BY entity_id"
     ).fetchall()
-    return [
-        {"id": row["entity_id"], **json.loads(row["fields"]), "stock": row["quantity"]}
-        for row in rows
-    ]
+    items = []
+    for row in rows:
+        stock = int(row["quantity"])
+        items.append(
+            {
+                "id": row["entity_id"],
+                **json.loads(row["fields"]),
+                "stock": stock,
+                "oversold": stock < 0,
+            }
+        )
+    return items

@@ -4,9 +4,10 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from syncmesh.core.security import require_admin
 from syncmesh.core.settings import Settings
 from syncmesh.node.routers import admin, events, items, sync
 from syncmesh.node.services.sync import Synchronizer
@@ -20,7 +21,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     database = Database(config.db_path)
     database.initialize()
     repository = Repository(database, config.node_id)
-    synchronizer = Synchronizer(repository, config.peer_urls(), config.sync_interval_seconds)
+    peer_secret = config.peer_secret.get_secret_value() if config.peer_secret else None
+    synchronizer = Synchronizer(
+        repository,
+        config.peer_urls(),
+        config.sync_interval_seconds,
+        peer_secret=peer_secret,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -35,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="SyncMesh Node", version="1.0.0", lifespan=lifespan)
     app.state.repository = repository
     app.state.synchronizer = synchronizer
+    app.state.settings = config
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.origins(),
@@ -54,9 +62,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "node_id": config.node_id,
             **repository.stats(),
             "online": synchronizer.online,
+            "peers": synchronizer.peer_status,
         }
 
-    @app.get("/conflicts", tags=["admin"])
+    @app.get("/conflicts", tags=["admin"], dependencies=[Depends(require_admin)])
     def conflicts() -> dict:
         """List conflict records currently stored by this node."""
         return {"conflicts": repository.conflicts()}

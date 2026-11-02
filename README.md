@@ -4,6 +4,11 @@
 
 <h1 align="center">SyncMesh</h1>
 
+<p align="center">
+  <a href="https://github.com/nihalmachhi/SyncMesh/actions/workflows/ci.yml"><img src="https://github.com/nihalmachhi/SyncMesh/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
+</p>
+
 SyncMesh is an educational offline-first inventory replication demo. Each node owns a separate SQLite database and can accept local inventory writes while peers are unreachable. Nodes exchange immutable operations when they can communicate.
 
 ## How it works
@@ -22,7 +27,7 @@ flowchart LR
   H --> I[React Router dashboard]
 ```
 
-Per-origin sequence numbers and version vectors identify gaps and missing changes. Quantity updates use additive deltas; concurrent field edits use a deterministic tie-break and record the resolution. This is an educational prototype without authentication or encrypted peer transport.
+Per-origin sequence numbers and version vectors identify gaps and missing changes. Field updates use per-field hybrid logical clock registers. Peer and admin endpoints support timestamped HMAC and bearer-token checks when secrets are configured. This remains an educational lab; use TLS for traffic outside a trusted network.
 
 ## Start the demo
 
@@ -40,18 +45,31 @@ Stop with Ctrl+C or `docker compose down`. To erase node data too, run `docker c
 
 A local change is written as an immutable operation with a node ID, per-origin sequence, entity, operation type, payload, base vector, and UTC timestamp. SQLite records the operation and updates that node's inventory view in the same transaction. Peers exchange version vectors and transfer missing operations. Duplicate delivery is ignored, and gaps are buffered until preceding sequence numbers arrive.
 
-Quantity changes use additive deltas, so independent updates commute. Field edits use causal ordering and a deterministic timestamp/node/operation tie-break for concurrent edits. Deletes are retained as tombstones. The implementation records concurrent field conflict resolutions in SQLite.
+Quantity changes use additive deltas, so independent updates commute. Field edits use causal ordering and a deterministic hybrid-clock/node/operation tie-break for concurrent edits. Causally incomplete operations remain buffered. Deletes are retained as tombstones. Concurrent edits to the same field create an open conflict record and can be resolved with an ordinary later operation. Changes are recorded atomically in the SQLite log and materialized view.
+
+## Claims and proof
+
+| Claim | Evidence |
+|---|---|
+| Concurrent field edits converge across delivery permutations and duplicate delivery | Randomized property test: `tests/property/test_convergence.py` |
+| More than one operation page can synchronize | In-process HTTP integration test: `tests/unit/test_sync.py` |
+| Peer batches are validated atomically and bounded to 500 operations | `tests/unit/test_regressions.py` |
+| Operations waiting on missing causal dependencies are buffered | `tests/unit/test_regressions.py` |
+| Admin and peer endpoints require configured credentials outside development mode | `tests/unit/test_regressions.py` |
+| Phase 1 suite coverage is at least 85% | `uv run pytest` coverage gate |
 
 ## Project layout
 
 - `src/syncmesh/core`: environment settings and shared errors.
 - `src/syncmesh/protocol`: validated operation messages and vector-clock functions.
+- `src/syncmesh/domain`: pure inventory state transitions.
+- `src/syncmesh/core/security.py`: admin bearer and peer HMAC checks.
 - `src/syncmesh/node/api.py`: FastAPI app factory and router registration.
 - `src/syncmesh/node/routers`: item, sync, admin, and event endpoints.
 - `src/syncmesh/node/services/sync.py`: asynchronous peer exchange loop.
 - `src/syncmesh/node/storage`: per-node SQLite lifecycle, schema, and repository.
 - `dashboard/src`: React + TypeScript dashboard using React Router.
-- `tests/unit`: repository and version-vector checks.
+- `tests/unit`, `tests/property`: API, migration, sync, regression, and convergence checks.
 - `docs`: project learning guide.
 
 ## Local development
@@ -63,14 +81,19 @@ uv sync --extra dev
 uv run pytest
 uv run ruff check src tests
 uv run mypy src
+docker compose config -q
 cd dashboard
 npm ci
 npm run build
 ```
 
-Run one API node locally with `uv run uvicorn syncmesh.node.main:app --app-dir src --reload`. Configure it using `SYNCMESH_NODE_ID`, `SYNCMESH_DB_PATH`, and `SYNCMESH_PEERS`. `.env.example` lists defaults; real `.env` files are ignored by Git.
+Run one API node locally with `uv run uvicorn syncmesh.node.main:create_app --factory --app-dir src --reload`. Configure it using `SYNCMESH_NODE_ID`, `SYNCMESH_DB_PATH`, and `SYNCMESH_PEERS`. `.env.example` lists development settings; real `.env` files are ignored by Git. Outside development, set `SYNCMESH_ENVIRONMENT=production`, `SYNCMESH_ADMIN_TOKEN`, and `SYNCMESH_PEER_SECRET`.
 
 ## Scope
 
-This is a learning prototype, not a production database. It has no authentication, encrypted transport, peer discovery, operation-log compaction, or full production conflict-review workflow. Keep demo endpoints on a trusted local network. No performance benchmarks are claimed.
+This is a learning prototype, not a production database. It does not provide encrypted transport, peer discovery, or operation-log compaction. The optional authentication mechanisms do not replace TLS or a production identity system. Keep demo endpoints on a trusted local network. No performance benchmarks are claimed.
+
+## License
+
+SyncMesh is available under the [MIT License](LICENSE).
 

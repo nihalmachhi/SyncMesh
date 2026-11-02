@@ -1,6 +1,8 @@
 """Environment settings for one replica."""
 
-from pydantic import Field
+from typing import Literal
+
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +15,16 @@ class Settings(BaseSettings):
     peers: str = ""
     sync_interval_seconds: float = Field(default=5, gt=0)
     cors_origins: str = "http://localhost:5173"
+    environment: Literal["dev", "test", "production"] = "dev"
+    admin_token: SecretStr | None = None
+    peer_secret: SecretStr | None = None
+    peer_auth_window_seconds: int = Field(default=300, ge=1, le=3600)
+
+    @field_validator("admin_token", "peer_secret", mode="before")
+    @classmethod
+    def empty_secret_is_unset(cls, value):
+        """Treat empty environment variables like an absent secret."""
+        return None if value == "" else value
 
     def peer_urls(self) -> tuple[str, ...]:
         """Split configured peer URLs."""

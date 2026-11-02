@@ -13,3 +13,12 @@ Notable changes to SyncMesh are recorded here.
 ### Changed
 
 - Begin phase 0 repository cleanup: conventional `dashboard/`, `core/`, and node router layout; normalized editor and line-ending settings.
+- Added causal operation buffering, per-field HLC registers, atomic peer batches, bounded indexed log pages, symmetric open conflicts, and ordinary-operation conflict resolution.
+- Added timestamped peer HMAC and constant-time admin bearer checks, peer retry backoff/logging, paginated exchanges, sync history, and per-peer health status.
+- Added SQLite `user_version` migration v1, container factory entry point, non-root image and healthcheck, MIT license, security policy, CI, Dependabot, and existing project icon favicon.
+- Added regression, migration, HTTP sync pagination, HLC, and randomized convergence tests; coverage is gated at 85%.
+
+### Decisions
+
+- Network UI sync and conflict review require the configured admin bearer token outside development. The dashboard UI will expose a credential entry flow when the authenticated controls are integrated in Phase 2.
+- Docker Compose defaults to development mode for the local lab. Production deployments fail closed when admin or peer secrets are missing.

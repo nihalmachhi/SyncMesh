@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS node_state (
 );
 CREATE TABLE IF NOT EXISTS entities (
  entity_id TEXT PRIMARY KEY, fields TEXT NOT NULL DEFAULT '{}',
+ field_registers TEXT NOT NULL DEFAULT '{}',
  quantity INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0,
  entity_vector TEXT NOT NULL DEFAULT '{}', deleted_vector TEXT,
  deleted_operation_id TEXT, updated_at TEXT NOT NULL
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS change_log (
  local_id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL UNIQUE,
  origin_node_id TEXT NOT NULL, origin_seq INTEGER NOT NULL, entity_id TEXT NOT NULL,
  op_type TEXT NOT NULL, payload TEXT NOT NULL, base_vector TEXT NOT NULL,
- wall_clock TEXT NOT NULL, received_at TEXT NOT NULL,
+ wall_clock TEXT NOT NULL, hlc TEXT NOT NULL DEFAULT '', received_at TEXT NOT NULL,
  UNIQUE(origin_node_id, origin_seq)
 );
 CREATE INDEX IF NOT EXISTS idx_log_origin ON change_log(origin_node_id, origin_seq);

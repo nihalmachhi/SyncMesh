@@ -25,7 +25,7 @@ def create_item(
     item_id = repository.create(
         {"name": body.name, "category": body.category, "price": body.price}, body.quantity
     )
-    return next(item for item in repository.items() if item["id"] == item_id)
+    return repository.get_item(item_id) or {}
 
 
 @router.patch("/items/{item_id}")
@@ -33,10 +33,10 @@ def update_item(
     item_id: str, body: FieldUpdate, repository: Annotated[Repository, Depends(get_repository)]
 ) -> dict:
     """Update fields on an existing item."""
-    if not any(item["id"] == item_id for item in repository.items()):
+    if repository.get_item(item_id) is None:
         raise HTTPException(404, "Item not found")
     repository.set_fields(item_id, body.fields)
-    return next(item for item in repository.items() if item["id"] == item_id)
+    return repository.get_item(item_id) or {}
 
 
 @router.post("/items/{item_id}/quantity")
@@ -46,17 +46,15 @@ def adjust_quantity(
     repository: Annotated[Repository, Depends(get_repository)],
 ) -> dict:
     """Apply a signed stock adjustment."""
-    if not any(item["id"] == item_id for item in repository.items()):
+    if repository.get_item(item_id) is None:
         raise HTTPException(404, "Item not found")
     repository.adjust(item_id, body.delta)
-    return next(item for item in repository.items() if item["id"] == item_id)
+    return repository.get_item(item_id) or {}
 
 
 @router.delete("/items/{item_id}", status_code=204)
-def delete_item(
-    item_id: str, repository: Annotated[Repository, Depends(get_repository)]
-) -> None:
+def delete_item(item_id: str, repository: Annotated[Repository, Depends(get_repository)]) -> None:
     """Delete an item by writing its tombstone operation."""
-    if not any(item["id"] == item_id for item in repository.items()):
+    if repository.get_item(item_id) is None:
         raise HTTPException(404, "Item not found")
     repository.delete(item_id)
