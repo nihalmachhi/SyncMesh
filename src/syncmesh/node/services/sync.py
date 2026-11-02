@@ -5,7 +5,7 @@ import asyncio
 import httpx
 
 from syncmesh.node.storage.repository import Repository
-from syncmesh.protocol.messages import ExchangeRequest
+from syncmesh.protocol.messages import ExchangeRequest, Operation
 
 
 class Synchronizer:
@@ -32,8 +32,6 @@ class Synchronizer:
                     ).json()
                     sent += len(outgoing)
                     for op in response["operations"]:
-                        from syncmesh.protocol.messages import Operation
-
                         self.repo.receive(Operation.model_validate(op))
                         received += 1
                 except (httpx.HTTPError, ValueError, KeyError):

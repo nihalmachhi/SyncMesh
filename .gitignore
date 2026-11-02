@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+.DS_Store
+Thumbs.db
 .venv/
 venv/
 __pycache__/
@@ -13,8 +15,12 @@ __pycache__/
 node_modules/
 dist/
 build/
+site/dist/
+dashboard/dist/
 .next/
 *.tsbuildinfo
 data/
 output/
 tmp/
+coverage.xml
+htmlcov/

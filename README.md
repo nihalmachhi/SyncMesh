@@ -44,14 +44,15 @@ Quantity changes use additive deltas, so independent updates commute. Field edit
 
 ## Project layout
 
-- `src/syncmesh/common`: environment settings and shared errors.
+- `src/syncmesh/core`: environment settings and shared errors.
 - `src/syncmesh/protocol`: validated operation messages and vector-clock functions.
-- `src/syncmesh/node/api.py`: FastAPI routes, startup, and WebSocket status.
+- `src/syncmesh/node/api.py`: FastAPI app factory and router registration.
+- `src/syncmesh/node/routers`: item, sync, admin, and event endpoints.
 - `src/syncmesh/node/services/sync.py`: asynchronous peer exchange loop.
 - `src/syncmesh/node/storage`: per-node SQLite lifecycle, schema, and repository.
-- `frontend/src`: React + TypeScript dashboard using React Router.
+- `dashboard/src`: React + TypeScript dashboard using React Router.
 - `tests/unit`: repository and version-vector checks.
-- `docs`: guide source and generated PDF.
+- `docs`: project learning guide.
 
 ## Local development
 
@@ -62,7 +63,7 @@ uv sync --extra dev
 uv run pytest
 uv run ruff check src tests
 uv run mypy src
-cd frontend
+cd dashboard
 npm ci
 npm run build
 ```

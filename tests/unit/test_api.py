@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from syncmesh.common.settings import Settings
+from syncmesh.core.settings import Settings
 from syncmesh.node.api import create_app
 
 
